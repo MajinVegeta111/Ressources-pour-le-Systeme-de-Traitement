@@ -1,0 +1,196 @@
+-------------------------VLAN ET VTP----------------------------------------
+
+DISTRIBUTION 
+
+vlan database
+vlan 99 name mgmt (créer un vlan)
+vtp domain efpnet (créer un domaine pour que tous les switch,... soient dans le même domaine)
+apply (permet de sauvegarder la configuration actuel)
+
+conf t
+int vlan 99
+ip address 192.168.99.1
+no shut
+
+conf t 
+cdp run
+int f3/0
+switchport mode trunk
+speed 100
+duplex full
+description "message_de_description du switch"
+
+[conf t 
+int f0/0	(port permettant le routage)
+ip add dhcp	(fournir une adresse à l'interface via dhcp car il est connecté à l'extérieur)
+no shut] n'est pas indispensable car n'est plus connecté à l'extérieur mais au switch core
+
+
+
+ACCESS
+
+vlan database
+vtp domain efpnet
+apply
+vtp client 
+
+conf t
+int f1/0
+cdp enable
+switchport mode trunk
+speed 100
+duplex full
+no shut
+
+
+show vtp status (apres la commande exit)
+show interface status
+show vlan-switch
+show cdp neighbors
+show cdp neighbors detail
+
+
+
+CORE 
+
+vlan database
+vtp transparent
+
+
+
+--------------------------------EterChannel-----------------------------------
+
+conf t
+inter port-channel 1	(créer l'etherChannel)
+switchport mode trunk	(ou mode access selon le besoin)
+
+conf t
+int range f3/14 - 15
+speed 100
+duplex full
+switchport mode trunk 
+channel-group 1 mode on (attribuer l'interface à l'etherChannel)
+
+
+show etherchannel 1
+show etherchannel 1 detail
+
+
+
+-------------------------------------DHCP-------------------------------------
+
+DISTRIBUTION
+
+conf t
+service dhcp (pour activer le service dhcp)
+ip dhcp pool user-vl-200 (configurer un range d'adresse dhcp pour le pool user-vl-200 )
+network 192.168.200.0 255.255.255.0
+default-router 192.168.200.1
+dns-server 1.1.1.1
+exit 
+ip dhcp excluded-address 192.168.200.1 192.168.200.99 (exclure des adresse du range d'adresse du dhcp)
+
+
+
+--------------------------SPANNING TREE PROTOCOLE----------------------------
+
+DISTRIBUTION
+
+conf t 
+spanning-tree vlan 200 root primary (activer le spanning tree par vlan et définir le switch comme switch primaire, dans ce cas-ci, pour le vlan 200)
+spanning-tree vlan 201 root primary
+spanning-tree vlan 99 root primary
+spanning-tree vlan 220 root secondary (activer le spanning tree par vlan et définir le switch comme switch secondary, dans ce cas-ci, pour le vlan 200)
+spanning-tree vlan 221 root secondary
+
+(l'inverse sur le 2ième switch de distribution)
+
+
+
+ACCESS
+
+conf t
+int f1/10
+switchport mode access 
+switchport access vlan 200
+spanning-tree portfast		(pour les ports connecté à un end user, permet d' accélérer le protocole STP)
+speed 100
+duplex full
+
+
+spanning-tree vlan 221 root priority _Valeur_ (activer le spanning tree et définir la priorité du switch sur la _Valeur_)
+show spanning-tree summary
+sh inter status | i connected
+
+
+
+-----------------------------HOT STANDBY ROUTER PROTOCOLE---------------------------
+
+DISTRIBUTION
+
+conf t 
+int vlan 221
+standby 221 ip 192.168.221.1
+standby 221 priority 110	(définir une priorité afin que l'adresse virtuelle du standby 221 sois prise par le switch avec la priorité la plus élevé)
+standby 221 preempt		(permet au switch de reprendre son role de switch principal s'il revient à la vie après être tombé)
+
+
+show standby brief
+
+------------------------------------------------------------------------------------
+
+
+
+attribuer une interface au vlan afin qu'elle passe au state up "switchport access vlan 18" (donner l'interface po2 qui sert au routage)
+
+conf t 
+int port-channel 2 
+switchport access vlan 18
+no shut
+
+
+
+
+----------------------------Open Shortest Path First--------------------------------
+
+sh ip inter brief (pour voir tous les routes que je veux annoncer)
+
+conf t
+ip routing
+router ospf 1
+network 192.168.255.0 0.0.0.7 area 0
+passive-interface default (aucune interface ne participe à l'ospf, les interfaces sont par défaut en mode passive)
+no passive-interface vlan 99	(l'interface vlan 99 participe à l'ospf)
+
+
+show ip protocols 
+show ip ospf neighbor
+show ip int brief
+show running-config | section ospf
+
+
+
+------------------------------------NAT---------------------------------------------
+
+DISTRIBUTION
+
+conf t 
+int vlan 200
+ip nat inside
+exit
+ip nat inside source static ip_réel ip_virtuelle (ip nat inside source static 192.168.200.100 10.10.10.100)
+end
+conf t
+int vlan 18
+ip nat outside
+exit
+ip nat outside source static 192.168.200.100 10.10.10.100
+
+
+CORE
+
+conf t
+ip route 10.10.10.0 255.255.255.0 192.168.255.6	(ip route adresse_réseau _Masque_ next_hop)
+
+
+show ip nat translations
